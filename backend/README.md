@@ -1,24 +1,27 @@
-# Room Checkr - Backend
+# Job Processing Backend
 
-A comprehensive attendance management system with face recognition capabilities.
+A robust job processing system for handling bulk directorship report generation with Python integration.
 
 ## Features
 
-- ✅ Student Management with Face Recognition
-- ✅ Session-based Attendance Tracking
-- ✅ Real-time Location Verification
-- ✅ Image Upload and Processing
+- ✅ Job Queue Management with Bull
+- ✅ Bulk Excel Processing
+- ✅ Python Script Integration for Report Generation
 - ✅ RESTful API Design
 - ✅ MongoDB Integration
+- ✅ Redis for Queue Management
+- ✅ File Upload and Validation
+- ✅ JWT Authentication
 
 ## Tech Stack
 
 - **Runtime:** Node.js
 - **Framework:** Express.js
 - **Database:** MongoDB with Mongoose
-- **File Upload:** Multer
-- **Face Recognition:** Python FastAPI + FaceNet PyTorch
+- **Queue System:** Redis + Bull
+- **File Processing:** Python Scripts
 - **Authentication:** JWT Tokens
+- **File Upload:** Multer
 
 ## Project Structure
 
@@ -27,57 +30,79 @@ backend/
 ├── src/
 │   ├── config/
 │   │   ├── db.js              # Database configuration
-│   │   └── multer.js          # File upload configuration
+│   │   ├── multer.js          # File upload configuration
+│   │   └── redis.js           # Redis configuration
 │   ├── controllers/
-│   │   ├── authController.js
-│   │   ├── sessionController.js
-│   │   └── studentsController.js
+│   │   ├── authController.js  # Authentication endpoints
+│   │   ├── healthController.js # Health check endpoints
+│   │   └── jobController.js   # Job management endpoints
 │   ├── middleware/
-│   │   └── uploadMiddleware.js
+│   │   ├── auth.js            # JWT authentication middleware
+│   │   └── uploadMiddleware.js # File upload middleware
 │   ├── models/
-│   │   ├── Teacher.js
-│   │   ├── Session.js
-│   │   └── Student.js
+│   │   ├── ClientModel.js     # Client data model
+│   │   └── JobProcessingModel.js # Job processing model
+│   ├── queues/
+│   │   └── job.queue.js       # Bull queue configuration
 │   ├── routes/
-│   │   ├── authRoutes.js
-│   │   ├── sessionRoutes.js
-│   │   ├── studentsRoutes.js
-│   │   └── uploadRoutes.js
+│   │   ├── authRoutes.js      # Authentication routes
+│   │   ├── healthRoutes.js    # Health check routes
+│   │   └── jobRoutes.js       # Job processing routes
+│   ├── services/
+│   │   └── job.service.js     # Job processing service
+│   ├── utils/
+│   │   ├── excelToCsv.js      # Excel to CSV conversion
+│   │   └── fileValidator.js   # File validation utilities
 │   └── index.js               # Main application file
+├── data/                      # Processed data storage
+├── python/                    # Python scripts for report generation
+│   ├── directorship_bulk.py
+│   └── directorship_reports_updated_fast.py
+├── reportTemplate/
+│   └── directorship-report.html # Report template
 ├── uploads/                   # Uploaded files directory
-├── server.py                  # Python face recognition API
+├── workers/                   # Background workers
+│   ├── worker.js              # Main worker file
+│   ├── processors/
+│   │   └── job.processor.js   # Job processing logic
+│   └── services/
+│       ├── python.service.js  # Python script execution
+│       └── report.service.js  # Report generation service
 ├── package.json
+├── pnpm-lock.yaml
 └── README.md
+```
 ```
 
 ## Installation
 
 ### Prerequisites
 
-- Node.js (v14 or higher)
+- Node.js (v16 or higher)
 - MongoDB
-- Python 3.8+ (for face recognition)
-- CUDA-compatible GPU (recommended for face recognition)
+- Redis
+- Python 3.8+ (for report generation scripts)
+- pnpm (recommended package manager)
 
 ### Setup
 
 1. **Clone the repository:**
 
    ```bash
-   git clone <repository-url>
-   cd room-checkr/backend
+   git clone https://github.com/maanis/job-processing.git
+   cd job-processing/backend
    ```
 
 2. **Install Node.js dependencies:**
 
    ```bash
-   npm install
+   pnpm install
    ```
 
 3. **Install Python dependencies:**
 
    ```bash
-   pip install fastapi uvicorn facenet-pytorch torch torchvision pillow numpy
+   pip install pandas openpyxl
    ```
 
 4. **Environment Configuration:**
@@ -86,14 +111,18 @@ backend/
    ```env
    NODE_ENV=development
    PORT=5000
-   MONGODB_URI=mongodb://localhost:27017/room-checkr
+   MONGODB_URI=mongodb://localhost:27017/job-processing
+   REDIS_URL=redis://localhost:6379
    JWT_SECRET=your-secret-key
-   FACE_API_URL=http://localhost:8000
    ```
 
-5. **Start MongoDB:**
+5. **Start MongoDB and Redis:**
    ```bash
+   # MongoDB
    mongod
+
+   # Redis (in another terminal)
+   redis-server
    ```
 
 ## Running the Application
@@ -103,141 +132,122 @@ backend/
 1. **Start the Node.js server:**
 
    ```bash
-   npm run dev
+   pnpm run dev
    ```
 
-2. **Start the Python face recognition server:**
+2. **Start the worker process:**
+
    ```bash
-   python server.py
-   ```
-   Or use the batch file:
-   ```bash
-   ./start_face_api.bat
+   node src/workers/worker.js
    ```
 
 ### Production Mode
 
 ```bash
-npm start
+pnpm start
 ```
 
 ## API Endpoints
 
 ### Authentication
 
-- `POST /api/auth/register` - Register teacher
-- `POST /api/auth/login` - Login teacher
-- `POST /api/auth/logout` - Logout teacher
+- `POST /api/auth/login` - User login
+- `POST /api/auth/register` - User registration
+- `GET /api/auth/profile` - Get user profile
 
-### Students Management
+### Job Management
 
-- `POST /api/students` - Create student (with face image)
-- `GET /api/students` - Get all students
-- `GET /api/students/:id` - Get student by ID
-- `GET /api/students/roll/:roll` - Get student by roll number
-- `PUT /api/students/:id` - Update student (with optional face image)
-- `DELETE /api/students/:id` - Delete student
-- `PUT /api/students/:id/face-embeddings` - Update face embeddings
+- `POST /api/jobs` - Create new job (upload Excel file)
+- `GET /api/jobs` - Get all jobs
+- `GET /api/jobs/:id` - Get job by ID
+- `GET /api/jobs/:id/status` - Get job processing status
+- `GET /api/jobs/:id/download` - Download processed report
 
-### Sessions Management
+### Health Check
 
-- `POST /api/sessions/create` - Create attendance session
-- `GET /api/sessions/all` - Get all sessions
-- `PUT /api/sessions/close` - Close session
-- `POST /api/sessions/mark-attendance` - Mark attendance
+- `GET /api/health` - Application health status
 
-### File Upload
+## Job Processing Flow
 
-- `POST /api/upload/single` - Single file upload
-- `POST /api/upload/multiple` - Multiple files upload
-
-## Face Recognition Integration
-
-### How It Works
-
-1. **Image Upload:** Student photos are uploaded via the API
-2. **Face Detection:** Python service detects faces using MTCNN
-3. **Embedding Extraction:** FaceNet extracts 512-dimensional embeddings
-4. **Storage:** Embeddings are stored in MongoDB for future comparison
-
-### Python API Endpoints
-
-- `POST /extract-embeddings/` - Extract face embeddings from image
-- `POST /compare-faces/` - Compare two face images
-
-### Configuration
-
-Set the Python API URL in your environment:
-
-```env
-FACE_API_URL=http://localhost:8000
-```
+1. **File Upload:** Excel files are uploaded via the API
+2. **Validation:** Files are validated for format and content
+3. **Queue Processing:** Jobs are added to Redis queue for background processing
+4. **Python Execution:** Python scripts process the data and generate reports
+5. **Report Generation:** HTML reports are created using templates
+6. **Storage:** Processed data and reports are stored in the database
 
 ## Database Schema
 
-### Student Model
+### Job Model
 
 ```javascript
 {
-  name: String,           // Required
-  roll: String,           // Required, unique, uppercase
-  faceEmbeddings: [Number], // Face recognition data
-  profileImage: String,   // Image URL
+  _id: ObjectId,
+  jobId: String,         // Unique job identifier
+  clientId: String,      // Client identifier
+  status: String,        // 'pending', 'processing', 'completed', 'failed'
+  inputFile: String,     // Path to uploaded Excel file
+  outputFile: String,    // Path to generated report
+  createdAt: Date,
+  updatedAt: Date,
+  error: String,         // Error message if failed
+  metadata: {
+    totalRecords: Number,
+    processedRecords: Number,
+    reportType: String
+  }
+}
+```
+
+### Client Model
+
+```javascript
+{
+  _id: ObjectId,
+  name: String,
+  email: String,
+  apiKey: String,
   createdAt: Date,
   updatedAt: Date
 }
 ```
 
-### Session Model
+## Queue System
 
-```javascript
-{
-  sessionId: String,      // Auto-generated 6-digit code
-  subject: String,
-  course: String,
-  year: String,
-  division: String,
-  room: String,
-  duration: Number,
-  location: {
-    latitude: Number,
-    longitude: Number
-  },
-  radius: Number,
-  isActive: Boolean,
-  attendance: [{
-    rollNo: String,
-    name: String,
-    deviceId: String,
-    geoLocation: Object,
-    timestamp: Date
-  }]
-}
-```
+The application uses Bull queues with Redis for job processing:
 
-## File Upload Configuration
+- **Job Queue:** Handles Excel file processing
+- **Worker:** Processes jobs in the background
+- **Retry Logic:** Automatic retries for failed jobs
 
-- **Max Size:** 5MB per file
-- **Allowed Types:** PNG, JPEG, JPG, GIF, WebP
-- **Storage:** Local filesystem in `uploads/` directory
-- **URL Access:** Files served at `/uploads/filename.ext`
+## File Processing
+
+### Supported Formats
+
+- **Input:** Excel files (.xlsx, .xls)
+- **Output:** HTML reports and CSV data files
+
+### Python Scripts
+
+- `directorship_bulk.py` - Bulk directorship data processing
+- `directorship_reports_updated_fast.py` - Fast report generation
 
 ## Error Handling
 
 The API includes comprehensive error handling for:
 
-- Database connection issues
 - File upload failures
-- Face recognition errors
-- Validation errors
-- Authentication failures
+- Invalid file formats
+- Database connection issues
+- Queue processing errors
+- Python script execution failures
 
 ## Security Features
 
 - JWT-based authentication
 - File type validation
 - Request size limits
-- CORS configuration
+- API key authentication for clients
 - Input sanitization
 
 ## Testing
@@ -245,19 +255,17 @@ The API includes comprehensive error handling for:
 ### API Testing
 
 ```bash
-# Test student creation with face image
-curl -X POST "http://localhost:5000/api/students" \
-  -F "name=John Doe" \
-  -F "roll=CS001" \
-  -F "image=@face.jpg"
+# Test job creation with Excel file
+curl -X POST "http://localhost:5000/api/jobs" \
+  -H "Authorization: Bearer <token>" \
+  -F "file=@data.xlsx" \
+  -F "clientId=client123"
 ```
 
-### Python API Testing
+### Health Check
 
 ```bash
-# Test face embedding extraction
-curl -X POST "http://localhost:8000/extract-embeddings/" \
-  -F "file=@face.jpg"
+curl http://localhost:5000/api/health
 ```
 
 ## Deployment
@@ -267,10 +275,41 @@ curl -X POST "http://localhost:8000/extract-embeddings/" \
 ```env
 NODE_ENV=production
 PORT=5000
-MONGODB_URI=mongodb://production-server/room-checkr
+MONGODB_URI=mongodb://production-server/job-processing
+REDIS_URL=redis://production-redis:6379
 JWT_SECRET=your-production-secret
-FACE_API_URL=http://face-api-server:8000
 ```
+
+### Docker Deployment
+
+```dockerfile
+FROM node:16-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --only=production
+COPY . .
+EXPOSE 5000
+CMD ["npm", "start"]
+```
+
+## Monitoring
+
+- Health check endpoints for service monitoring
+- Job status tracking
+- Error logging and reporting
+- Queue monitoring with Bull Dashboard
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests if applicable
+5. Submit a pull request
+
+## License
+
+This project is licensed under the MIT License.
 
 ### Docker Support
 
