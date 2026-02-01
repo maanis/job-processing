@@ -1,51 +1,41 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const Teacher = require('../models/Teacher');
+const Client = require('../models/ClientModel');
 
 const register = async (req, res) => {
     try {
-        const { name, email, password } = req.body;
+        const { username, password } = req.body;
 
-        // Check if teacher already exists
-        const existingTeacher = await Teacher.findOne({ email });
-        if (existingTeacher) {
-            return res.status(400).json({ error: 'Email already registered' });
+        // Check if client already exists
+        const existingClient = await Client.findOne({ username });
+        if (existingClient) {
+            return res.status(400).json({ error: 'Username already registered' });
         }
 
         // Hash password
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        // Create new teacher
-        const teacher = new Teacher({
-            name,
-            email,
+        // Create new client
+        const client = new Client({
+            username,
             password: hashedPassword
         });
 
-        await teacher.save();
+        await client.save();
 
         // Generate JWT token
         const token = jwt.sign(
-            { id: teacher._id, email: teacher.email },
+            { id: client._id, username: client.username },
             process.env.JWT_SECRET,
             { expiresIn: '24h' }
         );
 
-        // Set token in httpOnly cookie
-        res.cookie('token', token, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'strict',
-            maxAge: 24 * 60 * 60 * 1000 // 24 hours
-        });
-
         res.status(201).json({
-            message: 'Teacher registered successfully',
+            message: 'Client registered successfully',
             token,
-            teacher: {
-                id: teacher._id,
-                name: teacher.name,
-                email: teacher.email
+            client: {
+                id: client._id,
+                username: client.username
             }
         });
     } catch (error) {
@@ -56,42 +46,42 @@ const register = async (req, res) => {
 
 const login = async (req, res) => {
     try {
-        const { email, password } = req.body;
+        const { username, password } = req.body;
 
-        // Find teacher by email
-        const teacher = await Teacher.findOne({ email });
-        if (!teacher) {
+        // Find client by username
+        const client = await Client.findOne({ username });
+        if (!client) {
             return res.status(401).json({ error: 'Invalid credentials' });
         }
 
+        // Check if client is active
+        if (!client.isActive) {
+            return res.status(401).json({ error: 'Account is inactive' });
+        }
+
         // Check password
-        const isPasswordValid = await bcrypt.compare(password, teacher.password);
+        const isPasswordValid = await bcrypt.compare(password, client.password);
         if (!isPasswordValid) {
             return res.status(401).json({ error: 'Invalid credentials' });
         }
 
+        // Update last login
+        client.lastLoginAt = new Date();
+        await client.save();
+
         // Generate JWT token
         const token = jwt.sign(
-            { id: teacher._id, email: teacher.email },
+            { id: client._id, username: client.username },
             process.env.JWT_SECRET,
             { expiresIn: '24h' }
         );
 
-        // Set token in httpOnly cookie
-        res.cookie('token', token, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'strict',
-            maxAge: 24 * 60 * 60 * 1000 // 24 hours
-        });
-
         res.json({
             message: 'Login successful',
             token,
-            teacher: {
-                id: teacher._id,
-                name: teacher.name,
-                email: teacher.email
+            client: {
+                id: client._id,
+                username: client.username
             }
         });
     } catch (error) {
@@ -102,13 +92,6 @@ const login = async (req, res) => {
 
 const logout = (req, res) => {
     try {
-        // Clear the token cookie
-        res.clearCookie('token', {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'strict'
-        });
-
         res.json({ message: 'Logout successful' });
     } catch (error) {
         console.error('Logout error:', error);
@@ -132,18 +115,17 @@ const isAuthenticated = async (req, res) => {
 
         try {
             const decoded = jwt.verify(token, process.env.JWT_SECRET);
-            // Optional: Check if teacher still exists in database
-            const teacher = await Teacher.findById(decoded.id);
-            if (!teacher) {
+            // Check if client still exists and is active
+            const client = await Client.findById(decoded.id);
+            if (!client || !client.isActive) {
                 return res.json({ authenticated: false });
             }
 
             res.json({
                 authenticated: true,
-                teacher: {
-                    id: teacher._id,
-                    name: teacher.name,
-                    email: teacher.email
+                client: {
+                    id: client._id,
+                    username: client.username
                 }
             });
         } catch (error) {

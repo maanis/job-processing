@@ -5,20 +5,16 @@ const cookieParser = require('cookie-parser');
 const connectDB = require('./config/db');
 const healthRoutes = require('./routes/healthRoutes');
 const authRoutes = require('./routes/authRoutes');
-const sessionRoutes = require('./routes/sessionRoutes');
-const studentsRoutes = require('./routes/studentsRoutes');
+const jobRoutes = require('./routes/jobRoutes');
+const { setupStaticFiles } = require('./middleware/uploadMiddleware');
 
 const app = express();
 
 // Middleware
 app.use(express.json());
-const allowedOrigins = [
-    /\.localhost:\d+$/,                 // ✅ any localhost port
+const allowedOrigins = [             // ✅ any localhost port
     "http://localhost:8080",  // ✅ any localhost port (string version)
-    /\.vercel\.app$/,                   // ✅ any vercel.app subdomain
-    /\.ngrok-free\.app$/,               // ✅ any ngrok-free.app subdomain
-    "https://attend-ex.web.app",
-    "https://93f2d792a542.ngrok-free.app"
+    "*"
 ];
 app.use(cors({
     origin: (origin, callback) => {
@@ -33,11 +29,13 @@ app.use(cors({
 
 app.use(cookieParser());
 
+// Setup static file serving for uploads
+setupStaticFiles(app);
+
 // Routes
 app.use('/api', healthRoutes);
 app.use('/api/auth', authRoutes);
-app.use('/api/sessions', sessionRoutes);
-app.use('/api/students', studentsRoutes);
+app.use('/api/jobs', jobRoutes);
 
 // Connect to DB
 connectDB();
