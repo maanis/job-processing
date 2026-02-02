@@ -111,7 +111,7 @@ const processJob = async (req, res) => {
             clientId
         },
             {
-                attempts: 2
+                attempts: 3
             }
         );
 

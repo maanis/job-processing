@@ -4,10 +4,8 @@ import time
 import json
 import base64
 import random
-import logging
 import requests
 import pandas as pd
-from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dotenv import load_dotenv
 
@@ -17,23 +15,16 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-ONGRID_API_KEY = os.getenv('ONGRID_API_KEY')
-ONGRID_AUTH_TYPE = os.getenv('ONGRID_AUTH_TYPE')
-ONGRID_REFERENCE_ID = os.getenv('ONGRID_REFERENCE_ID')
-DIGITAP_USERNAME = os.getenv('DIGITAP_USERNAME')
-DIGITAP_PASSWORD = os.getenv('DIGITAP_PASSWORD')
+ONGRID_API_KEY = os.getenv("ONGRID_API_KEY")
+ONGRID_AUTH_TYPE = os.getenv("ONGRID_AUTH_TYPE")
+ONGRID_REFERENCE_ID = os.getenv("ONGRID_REFERENCE_ID")
+DIGITAP_USERNAME = os.getenv("DIGITAP_USERNAME")
+DIGITAP_PASSWORD = os.getenv("DIGITAP_PASSWORD")
+
+MAX_ROW_RETRIES = 2
 
 # ============================================================
-# LOGGING (stdout + file)
-# ============================================================
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s"
-)
-
-# ============================================================
-# VALIDATE INPUT
+# INPUT VALIDATION
 # ============================================================
 
 if len(sys.argv) < 2:
@@ -42,110 +33,139 @@ if len(sys.argv) < 2:
 
 INPUT_CSV = sys.argv[1]
 JOB_DIR = os.path.dirname(INPUT_CSV)
+JOB_ID = os.path.basename(JOB_DIR)
 
 OUTPUT_CSV = os.path.join(JOB_DIR, "output.csv")
 FAILED_ROWS_CSV = os.path.join(JOB_DIR, "failed_rows.csv")
+SUMMARY_JSON = os.path.join(JOB_DIR, "summary.json")
 
 if not os.path.exists(INPUT_CSV):
-    print(f"ERROR: File not found: {INPUT_CSV}")
+    print("ERROR: File not found")
     sys.exit(1)
 
 # ============================================================
-# API FUNCTIONS (unchanged logic)
+# DIN API (BUSINESS-AWARE)
 # ============================================================
 
-def fetch_din_by_pan(pan, timeout=90, max_retries=3):
+def fetch_din_by_pan(pan):
     url = "https://api.gridlines.io/mca-api/fetch-din-by-pan"
-
     headers = {
-        "Accept": "application/json",
         "Content-Type": "application/json",
         "X-API-Key": ONGRID_API_KEY,
         "X-Auth-Type": ONGRID_AUTH_TYPE,
-        "X-Reference-ID": ONGRID_REFERENCE_ID
+        "X-Reference-ID": ONGRID_REFERENCE_ID,
     }
-
     payload = {"pan": pan.upper(), "consent": "Y"}
 
-    retries = 0
-    while retries <= max_retries:
-        try:
-            response = requests.post(url, headers=headers, json=payload, timeout=timeout)
+    res = requests.post(url, headers=headers, json=payload, timeout=60)
 
-            if response.status_code == 429:
-                time.sleep(min((2 ** retries) + random.random(), 30))
-                retries += 1
-                continue
+    try:
+        data = res.json()
+    except Exception:
+        raise Exception("DIN API: Invalid JSON response")
 
-            response.raise_for_status()
-            data = response.json()
-            din = data.get("data", {}).get("din_details", {}).get("din")
-            return din if din else "N", retries
+    # -------- HARD FAILURES --------
 
-        except Exception:
-            retries += 1
-            if retries > max_retries:
-                return "N", retries
-            time.sleep(min((2 ** retries) + random.random(), 20))
+    # Rate limit or API-level error
+    if "message" in data and "rate limit" in data["message"].lower():
+        raise Exception(f"DIN API: {data['message']}")
 
-    return "N", retries
+    if res.status_code != 200:
+        raise Exception("DIN API: HTTP error")
 
+    api_data = data.get("data", {})
+    code = api_data.get("code")
+    message = api_data.get("message", "Unknown DIN API response")
 
-def fetch_gst_by_pan(pan, timeout=90, max_retries=3):
+    # Invalid PAN → FAIL ROW
+    if code == "1008":
+        raise Exception(f"DIN API: {message}")
+
+    # -------- VALID BUSINESS CASES --------
+
+    # DIN FOUND
+    if code == "1006" and "din_details" in api_data:
+        return api_data["din_details"].get("din", "N")
+
+    # PAN not linked / DIN does not exist → acceptable
+    if code in ("1007", "1011"):
+        return "N"
+
+    # -------- SAFETY NET --------
+    # Unknown but non-fatal → treat as no DIN
+    return "N"
+
+# ============================================================
+# GST API
+# ============================================================
+
+def fetch_gst_by_pan(pan):
     url = "https://svc.digitap.ai/validation/kyb/v1/gstpansearch"
-
-    credentials = f"{DIGITAP_USERNAME}:{DIGITAP_PASSWORD}"
-    encoded = base64.b64encode(credentials.encode()).decode()
-
+    creds = f"{DIGITAP_USERNAME}:{DIGITAP_PASSWORD}"
     headers = {
+        "Authorization": f"Basic {base64.b64encode(creds.encode()).decode()}",
         "Content-Type": "application/json",
-        "Authorization": f"Basic {encoded}"
     }
 
-    payload = {"client_ref_num": str(random.randint(100000, 999999)), "pan": pan.upper()}
+    payload = {
+        "client_ref_num": str(random.randint(100000, 999999)),
+        "pan": pan.upper(),
+    }
 
-    retries = 0
-    while retries <= max_retries:
+    res = requests.post(url, headers=headers, json=payload, timeout=60)
+
+    try:
+        data = res.json()
+    except Exception:
+        raise Exception("GST API: Invalid JSON response")
+
+    # Invalid PAN
+    if data.get("http_response_code") == 400:
+        raise Exception("GST API: Invalid PAN or bad request")
+
+    # Other API errors
+    if data.get("http_response_code") != 200:
+        raise Exception("GST API: API error")
+
+    gst_list = data.get("result", {}).get("gstinResList", [])
+    return ", ".join(g["gstin"] for g in gst_list) if gst_list else "N"
+
+# ============================================================
+# ROW PROCESSOR (ROW-LEVEL RETRIES)
+# ============================================================
+
+def process_row_safe(row):
+    pan = str(row.get("PAN", "")).strip()
+
+    if not pan or len(pan) != 10:
+        return None, {
+            **row,
+            "jobId": JOB_ID,
+            "error": "Invalid PAN format",
+        }
+
+    last_error = None
+
+    for _ in range(MAX_ROW_RETRIES + 1):
         try:
-            response = requests.post(url, headers=headers, json=payload, timeout=timeout)
-            response.raise_for_status()
-            data = response.json()
+            din = fetch_din_by_pan(pan)
+            gst = fetch_gst_by_pan(pan)
 
-            if data.get("result_code") != 101:
-                return "N", retries
+            return {
+                **row,
+                "DIN": din,
+                "GST": gst,
+                "Status": "Y" if din != "N" else "N",
+            }, None
 
-            gst_list = data.get("result", {}).get("gstinResList", [])
-            if not gst_list:
-                return "N", retries
+        except Exception as e:
+            last_error = str(e)
+            time.sleep(1)
 
-            formatted = [g.get("gstin") for g in gst_list]
-            return ", ".join(formatted), retries
-
-        except Exception:
-            retries += 1
-            if retries > max_retries:
-                return "N", retries
-            time.sleep(min((2 ** retries) + random.random(), 20))
-
-    return "N", retries
-
-# ============================================================
-# ROW PROCESSOR
-# ============================================================
-
-def process_row(row):
-    pan = str(row["PAN"]).strip()
-
-    din, din_retries = fetch_din_by_pan(pan)
-    gst, gst_retries = fetch_gst_by_pan(pan)
-
-    return {
+    return None, {
         **row,
-        "DIN": din,
-        "GST": gst,
-        "Status": "Y" if din != "N" else "N",
-        "DIN_Retries": din_retries,
-        "GST_Retries": gst_retries
+        "jobId": JOB_ID,
+        "error": last_error or "Unknown processing error",
     }
 
 # ============================================================
@@ -155,40 +175,46 @@ def process_row(row):
 def main():
     df = pd.read_csv(INPUT_CSV)
 
-    required_cols = {"PAN"}
-    if not required_cols.issubset(df.columns):
-        print("ERROR: Missing required columns")
-        sys.exit(1)
-
-    results = []
-    failed = []
-
-    print(f"STARTED: processing {len(df)} rows")
+    total_rows = len(df)
+    success_rows = []
+    failed_rows = []
 
     with ThreadPoolExecutor(max_workers=5) as executor:
-        futures = {executor.submit(process_row, row): idx for idx, row in df.iterrows()}
+        futures = [
+            executor.submit(process_row_safe, row)
+            for _, row in df.iterrows()
+        ]
 
         for i, future in enumerate(as_completed(futures), start=1):
-            try:
-                result = future.result()
-                results.append(result)
-            except Exception:
-                failed.append(df.iloc[futures[future]])
+            result, failed = future.result()
 
-            print(f"PROGRESS: {i}/{len(df)}")
+            if result:
+                success_rows.append(result)
+            if failed:
+                failed_rows.append(failed)
 
-    pd.DataFrame(results).to_csv(OUTPUT_CSV, index=False)
+            print(f"PROGRESS: {i}/{total_rows}")
 
-    if failed:
-        pd.DataFrame(failed).to_csv(FAILED_ROWS_CSV, index=False)
+    pd.DataFrame(success_rows).to_csv(OUTPUT_CSV, index=False)
+
+    if failed_rows:
+        pd.DataFrame(failed_rows).to_csv(FAILED_ROWS_CSV, index=False)
+
+    summary = {
+        "totalRows": total_rows,
+        "successRows": len(success_rows),
+        "failedRows": len(failed_rows),
+    }
+
+    with open(SUMMARY_JSON, "w") as f:
+        json.dump(summary, f)
 
     print("COMPLETED")
     sys.exit(0)
-
 
 if __name__ == "__main__":
     try:
         main()
     except Exception as e:
-        print(f"FATAL: {e}")
+        print("FATAL:", e)
         sys.exit(1)

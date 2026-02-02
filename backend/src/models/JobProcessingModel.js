@@ -15,7 +15,7 @@ const processingJobSchema = new mongoose.Schema({
     totalRows: {
         type: Number
     },
-    processedRows: {
+    successRows: {
         type: Number,
         default: 0
     },
