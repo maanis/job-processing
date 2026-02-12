@@ -12,8 +12,6 @@ const startJobWorker = async () => {
         {
             connection: redis,
             concurrency: 1,
-
-            // ✅ FIXED: must be objects
             removeOnComplete: { count: 10 },
             removeOnFail: { count: 5 },
 
