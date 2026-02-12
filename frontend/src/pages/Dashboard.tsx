@@ -5,6 +5,7 @@ import { JobDetailsModal } from "@/components/JobDetailsModal";
 import { UploadJobModal } from "@/components/UploadJobModal";
 import { useJobs, Job } from "@/hooks/useJobs";
 import { ChevronLeft, ChevronRight, RefreshCw, Loader2 } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 
 export default function Dashboard() {
@@ -12,9 +13,9 @@ export default function Dashboard() {
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
 
-  const { jobs, pagination, isLoading, refetch } = useJobs(currentPage, 8);
-  const [isRefetching, setIsRefetching] = useState(false);
+  const { jobs, pagination, isLoading } = useJobs(currentPage, 8);
   const queryClient = useQueryClient();
+  const [isRefetching, setIsRefetching] = useState(false);
 
   const handleViewDetails = (job: Job) => {
     setSelectedJob(job);
@@ -24,10 +25,10 @@ export default function Dashboard() {
     setCurrentPage(page);
   };
 
-  const handleRevalidate = async () => {
+  const handleRevalidate = () => {
     setIsRefetching(true);
-    await refetch();
-    setIsRefetching(false);
+    queryClient.invalidateQueries({ queryKey: ['jobs'] });
+    setTimeout(() => setIsRefetching(false), 300); // Show spinner for 0.3 second
   };
 
   return (

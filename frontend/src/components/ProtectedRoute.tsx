@@ -8,12 +8,16 @@ interface ProtectedRouteProps {
 }
 
 export default function ProtectedRoute({ children }: ProtectedRouteProps) {
-    const [status, setStatus] = useState<'loading' | 'ok' | 'redirect'>('loading');
+    const token = localStorage.getItem('token');
+    const [status, setStatus] = useState<'loading' | 'ok' | 'redirect'>(
+        token ? 'loading' : 'redirect'
+    );
     const [redirectTo, setRedirectTo] = useState<string | null>(null);
     const location = useLocation();
 
     useEffect(() => {
-        const token = localStorage.getItem('token');
+        // const token = localStorage.getItem('token');
+
         if (!token) {
             setStatus('redirect');
             return;
@@ -21,54 +25,44 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
 
         let mounted = true;
 
-        (async () => {
+        const verify = async () => {
             try {
                 const res = await authenticate();
+
                 if (!mounted) return;
 
-                if (res && res.authenticated) {
-                    // Optionally update local user info
+                if (res?.authenticated) {
                     if (res.client) {
                         localStorage.setItem('user', JSON.stringify(res.client));
-                        if (res.client.role) localStorage.setItem('role', res.client.role);
+                        localStorage.setItem('role', res.client.role || '');
                     }
 
                     const role = res.client?.role || localStorage.getItem('role');
-                    const path = location.pathname || window.location.pathname;
+                    const path = location.pathname;
 
-                    // Admins should not be sent to user dashboard
                     if (role === 'admin' && (path === '/dashboard' || path === '/failed-rows')) {
                         setRedirectTo('/admin/dashboard');
-                        setStatus('ok');
-                        return;
-                    }
-
-                    // Non-admins should not access admin routes
-                    if (role !== 'admin' && path.startsWith('/admin')) {
+                    } else if (role !== 'admin' && path.startsWith('/admin')) {
                         setRedirectTo('/dashboard');
-                        setStatus('ok');
-                        return;
                     }
 
                     setStatus('ok');
                 } else {
-                    localStorage.removeItem('token');
-                    localStorage.removeItem('user');
-                    localStorage.removeItem('role');
-                    setStatus('redirect');
+                    throw new Error('Not authenticated');
                 }
-            } catch (err) {
-                localStorage.removeItem('token');
-                localStorage.removeItem('user');
-                localStorage.removeItem('role');
+            } catch {
+                localStorage.clear();
                 setStatus('redirect');
             }
-        })();
+        };
+
+        verify();
 
         return () => {
             mounted = false;
         };
-    }, []);
+    }, [location.pathname]);
+
 
     if (status === 'loading') {
         return (
