@@ -153,7 +153,22 @@ def fetch_gst_by_pan(pan):
         raise Exception("GST API: API error")
 
     gst_list = data.get("result", {}).get("gstinResList", [])
-    return ", ".join(g["gstin"] for g in gst_list) if gst_list else "N"
+    if not gst_list:
+        return "N"
+
+    # Combine GSTINs with their auth status
+    gst_combined = []
+    for g in gst_list:
+        gstin = g.get("gstin", "")
+        auth_status = g.get("authStatus", "")
+
+        if gstin:
+            if auth_status:
+                gst_combined.append(f"{gstin} ({auth_status})")
+            else:
+                gst_combined.append(gstin)
+
+    return ", ".join(gst_combined) if gst_combined else "N"
 
 # ============================================================
 # ROW PROCESSOR
