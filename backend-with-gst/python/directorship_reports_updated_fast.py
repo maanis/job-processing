@@ -160,10 +160,7 @@ def create_excel_report(row, excel_path, candidate_name):
 
         # Status color
         if col == 5:
-            if status == "Y":
-                c.font = Font(name="Arial", size=9, bold=True, color="008000")
-            else:
-                c.font = Font(name="Arial", size=9, bold=True, color="FF0000")
+            c.font = Font(name="Arial", size=9, bold=True, color="000000")
 
     # Dynamic height
     adjust_dynamic_row_height(ws, 4)
