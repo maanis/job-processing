@@ -224,7 +224,27 @@ def create_excel_report(row, excel_path, candidate_name):
 
 def convert_excel_to_pdf(soffice_path, excel_path, pdf_path):
 
+    # Validate input file
+    if not os.path.exists(excel_path):
+        raise RuntimeError(f"Excel file does not exist: {excel_path}")
+
+    if not os.access(excel_path, os.R_OK):
+        raise RuntimeError(f"Excel file is not readable: {excel_path}")
+
+    # Check file size (empty files might cause issues)
+    if os.path.getsize(excel_path) == 0:
+        raise RuntimeError(f"Excel file is empty: {excel_path}")
+
     output_dir = os.path.dirname(excel_path)
+    base_name = os.path.splitext(os.path.basename(excel_path))[0]
+
+    # Clean up any existing PDF files with the same base name
+    existing_pdfs = glob.glob(os.path.join(output_dir, f"{base_name}*.pdf"))
+    for pdf in existing_pdfs:
+        try:
+            os.remove(pdf)
+        except:
+            pass  # Ignore cleanup errors
 
     cmd = [
         soffice_path,
@@ -236,19 +256,45 @@ def convert_excel_to_pdf(soffice_path, excel_path, pdf_path):
         "--outdir", output_dir
     ]
 
-    subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    time.sleep(2)
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=30)
 
-    base_name = os.path.splitext(os.path.basename(excel_path))[0]
-    candidates = glob.glob(os.path.join(output_dir, f"{base_name}*.pdf"))
+            if result.returncode != 0:
+                error_msg = f"LibreOffice conversion failed with code {result.returncode}"
+                if result.stderr:
+                    error_msg += f"\nStderr: {result.stderr}"
+                if attempt < max_retries - 1:
+                    print(f"Attempt {attempt + 1} failed, retrying... Error: {error_msg}", flush=True)
+                    time.sleep(2)
+                    continue
+                else:
+                    raise RuntimeError(f"{error_msg}\nCommand: {' '.join(cmd)}")
 
-    if not candidates:
-        raise RuntimeError(f"PDF not generated for {excel_path}")
+            # Wait for file to be written
+            time.sleep(3)
 
-    generated_pdf = candidates[0]
+            candidates = glob.glob(os.path.join(output_dir, f"{base_name}*.pdf"))
 
-    if generated_pdf != pdf_path:
-        shutil.move(generated_pdf, pdf_path)
+            if candidates:
+                generated_pdf = candidates[0]
+                if generated_pdf != pdf_path:
+                    shutil.move(generated_pdf, pdf_path)
+                return  # Success
+
+            if attempt < max_retries - 1:
+                print(f"Attempt {attempt + 1}: PDF not found, retrying...", flush=True)
+                time.sleep(2)
+            else:
+                raise RuntimeError(f"PDF not generated for {excel_path} after {max_retries} attempts\nLibreOffice stdout: {result.stdout}")
+
+        except subprocess.TimeoutExpired:
+            if attempt < max_retries - 1:
+                print(f"Attempt {attempt + 1} timed out, retrying...", flush=True)
+                time.sleep(2)
+            else:
+                raise RuntimeError(f"LibreOffice conversion timed out for {excel_path} after {max_retries} attempts")
 
 # ============================================================
 # MAIN DRIVER
@@ -270,6 +316,7 @@ def generate_reports(input_csv, output_zip):
     print(f"[INFO] Total Records: {total}\n", flush=True)
 
     pdf_files = []
+    failed_conversions = []
 
     for index, row in df.iterrows():
 
@@ -284,9 +331,20 @@ def generate_reports(input_csv, output_zip):
         create_excel_report(row, excel_path, candidate)
 
         print(f"[{index+1}/{total}] Converting to PDF -> {base_name}", flush=True)
-        convert_excel_to_pdf(soffice_path, excel_path, pdf_path)
+        try:
+            convert_excel_to_pdf(soffice_path, excel_path, pdf_path)
+            pdf_files.append(pdf_path)
+            print(f"[{index+1}/{total}] PDF Generated Successfully -> {base_name}", flush=True)
+        except Exception as e:
+            error_msg = f"Failed to convert {base_name}: {str(e)}"
+            print(f"[ERROR] {error_msg}", flush=True)
+            failed_conversions.append((base_name, str(e)))
+            # Continue with next file instead of crashing
 
-        pdf_files.append(pdf_path)
+    if failed_conversions:
+        print(f"\n[WARNING] {len(failed_conversions)} PDF conversions failed:", flush=True)
+        for name, error in failed_conversions:
+            print(f"  - {name}: {error}", flush=True)
 
     print("\n[ZIP] Creating ZIP file...", flush=True)
 
@@ -296,6 +354,8 @@ def generate_reports(input_csv, output_zip):
 
     print("\n[SUCCESS] REPORT GENERATION COMPLETE", flush=True)
     print(f"[PDF] Generated: {len(pdf_files)} / {total}", flush=True)
+    if failed_conversions:
+        print(f"[FAILED] PDF conversions: {len(failed_conversions)} / {total}", flush=True)
     print(f"[DIR] {reports_folder}", flush=True)
     print(f"[ZIP] {output_zip}", flush=True)
 

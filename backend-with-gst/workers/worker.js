@@ -11,7 +11,7 @@ const startJobWorker = async () => {
         jobProcessor,
         {
             connection: redis,
-            concurrency: 1,
+            concurrency: 2,
             removeOnComplete: { count: 10 },
             removeOnFail: { count: 5 },
 
