@@ -40,13 +40,6 @@ const limiter = rateLimit({
 // Apply rate limiting to all routes
 app.use(limiter);
 
-// Stricter rate limit for auth routes
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 5, // 5 login attempts per 15 minutes
-  message: "Too many login attempts, please try again later.",
-});
-
 // Middleware
 app.use(express.json());
 
@@ -86,7 +79,7 @@ setupStaticFiles(app);
 
 // Routes
 app.use("/api", healthRoutes);
-app.use("/api/auth", authLimiter, authRoutes); // Apply stricter rate limit to auth
+app.use("/api/auth", authRoutes);
 app.use("/api/jobs", jobRoutes);
 const adminRoutes = require("./routes/adminRoutes");
 app.use("/api/admin", adminRoutes);

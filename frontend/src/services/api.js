@@ -2,7 +2,7 @@ import axios from 'axios';
 
 // Create axios instance with base URL from environment
 const api = axios.create({
-    baseURL: import.meta.env.VITE_API_BASE_URL,
+    baseURL: import.meta.env.VITE_API_BASE_URL || 'https://api-check.llmtech.in/api',
 });
 
 // Request interceptor to add Bearer token from localStorage
