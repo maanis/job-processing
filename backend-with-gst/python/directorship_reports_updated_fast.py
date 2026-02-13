@@ -46,6 +46,11 @@ def get_timestamp():
 
 def require_soffice():
     possible_paths = [
+        # Linux paths
+        "/usr/bin/soffice",
+        "/usr/bin/libreoffice",
+        "/snap/bin/libreoffice",
+        # Windows paths
         r"C:\Program Files\LibreOffice\program\soffice.exe",
         r"C:\Program Files (x86)\LibreOffice\program\soffice.exe",
     ]
@@ -53,6 +58,14 @@ def require_soffice():
         if os.path.exists(path):
             print(f"[OK] soffice detected at: {path}", flush=True)
             return path
+    
+    # Also try using shutil.which to find soffice in PATH
+    import shutil
+    soffice_in_path = shutil.which("soffice")
+    if soffice_in_path:
+        print(f"[OK] soffice found in PATH at: {soffice_in_path}", flush=True)
+        return soffice_in_path
+    
     raise RuntimeError("LibreOffice not found")
 
 # ============================================================
