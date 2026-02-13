@@ -2,12 +2,15 @@ const fs = require("fs");
 const path = require("path");
 const { spawn } = require("child_process");
 
+// Use python3 on Linux, or allow override via environment variable
+const PYTHON_CMD = process.env.PYTHON_CMD || "python3";
+
 async function generateReports(outputCsvPath, jobId) {
     const jobDir = path.dirname(outputCsvPath);
     const zipPath = path.join(jobDir, "reports.zip");
 
     return new Promise((resolve, reject) => {
-        const process = spawn("python", [
+        const process = spawn(PYTHON_CMD, [
             "python/directorship_reports_updated_fast.py",
             outputCsvPath,
             zipPath

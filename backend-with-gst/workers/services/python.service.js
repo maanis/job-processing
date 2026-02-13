@@ -1,9 +1,12 @@
 const { spawn } = require("child_process");
 const JobProcessingModel = require("../../src/models/JobProcessingModel");
 
+// Use python3 on Linux, or allow override via environment variable
+const PYTHON_CMD = process.env.PYTHON_CMD || "python3";
+
 const runPythonScript = (file, jobId) => {
     return new Promise((resolve, reject) => {
-        const pythonProcess = spawn("python", [
+        const pythonProcess = spawn(PYTHON_CMD, [
             "python/directorship_bulk.py",
             file,
             jobId

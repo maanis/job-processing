@@ -4,6 +4,9 @@ const path = require("path");
 const JobProcessingModel = require("../../src/models/JobProcessingModel.js");
 const { runPythonScript } = require("../services/python.service.js");
 
+// Use python3 on Linux, or allow override via environment variable
+const PYTHON_CMD = process.env.PYTHON_CMD || "python3";
+
 // Global failed rows file
 const GLOBAL_FAILED_FILE = path.join(
     process.cwd(),
@@ -152,7 +155,7 @@ const jobProcessor = async (job) => {
         await JobProcessingModel.findByIdAndUpdate(jobId, { reportsGenerated: 0 });
 
         await new Promise((resolve, reject) => {
-            const process = require("child_process").spawn("python", [
+            const process = require("child_process").spawn(PYTHON_CMD, [
                 "python/directorship_reports_updated_fast.py",
                 outputCsvPath,
                 zipPath
