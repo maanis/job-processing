@@ -5,3 +5,12 @@ venv
 __pycache__
 data
 uploads
+logs
+*.log
+.DS_Store
+.vscode
+.idea
+*.swp
+*.swo
+*~
+.pm2
