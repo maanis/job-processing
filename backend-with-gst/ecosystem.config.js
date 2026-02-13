@@ -1,51 +1,69 @@
+require('dotenv').config();
+
 module.exports = {
   apps: [
     {
-      name: "job-api",
-      script: "./src/index.js",
-      instances: 1, // or 'max' for cluster mode
-      exec_mode: "fork", // or 'cluster'
+      name: 'job-processing-backend',
+      script: './src/index.js',
+      instances: 1,
+      exec_mode: 'cluster',
       env: {
-        NODE_ENV: "production",
+        NODE_ENV: 'production',
+        PORT: process.env.PORT || 5000,
+        MONGO_URI: process.env.MONGO_URI,
+        JWT_SECRET: process.env.JWT_SECRET,
+        REDIS_HOST: process.env.REDIS_HOST || 'localhost',
+        REDIS_PORT: process.env.REDIS_PORT || 6379,
+        REDIS_PASSWORD: process.env.REDIS_PASSWORD || '',
+        FRONTEND_URL: process.env.FRONTEND_URL,
+        PYTHON_CMD: process.env.PYTHON_CMD || 'python3',
+        // OnGrid API
+        ONGRID_API_KEY: process.env.ONGRID_API_KEY,
+        ONGRID_AUTH_TYPE: process.env.ONGRID_AUTH_TYPE,
+        ONGRID_REFERENCE_ID: process.env.ONGRID_REFERENCE_ID,
+        // Digitap API
+        DIGITAP_USERNAME: process.env.DIGITAP_USERNAME,
+        DIGITAP_PASSWORD: process.env.DIGITAP_PASSWORD,
       },
-      error_file: "./logs/api-error.log",
-      out_file: "./logs/api-out.log",
-      log_date_format: "YYYY-MM-DD HH:mm:ss Z",
+      max_memory_restart: '1G',
+      error_file: './logs/backend-error.log',
+      out_file: './logs/backend-out.log',
+      log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
       merge_logs: true,
-      autorestart: true,
-      watch: false,
-      max_memory_restart: "1G",
-      // Graceful shutdown
-      kill_timeout: 5000,
-      listen_timeout: 10000,
-      // Wait for app to be ready before considering it online
-      wait_ready: true,
-      // Advanced features
-      min_uptime: "10s",
+      min_uptime: '10s',
       max_restarts: 10,
       restart_delay: 4000,
+      kill_timeout: 5000,
     },
     {
-      name: "job-worker",
-      script: "./workers/worker.js",
+      name: 'job-worker',
+      script: './workers/worker.js',
       instances: 1,
-      exec_mode: "fork",
+      exec_mode: 'fork',
       env: {
-        NODE_ENV: "production",
+        NODE_ENV: 'production',
+        MONGO_URI: process.env.MONGO_URI,
+        REDIS_HOST: process.env.REDIS_HOST || 'localhost',
+        REDIS_PORT: process.env.REDIS_PORT || 6379,
+        REDIS_PASSWORD: process.env.REDIS_PASSWORD || '',
+        PYTHON_CMD: process.env.PYTHON_CMD || 'python3',
+        // OnGrid API
+        ONGRID_API_KEY: process.env.ONGRID_API_KEY,
+        ONGRID_AUTH_TYPE: process.env.ONGRID_AUTH_TYPE,
+        ONGRID_REFERENCE_ID: process.env.ONGRID_REFERENCE_ID,
+        // Digitap API
+        DIGITAP_USERNAME: process.env.DIGITAP_USERNAME,
+        DIGITAP_PASSWORD: process.env.DIGITAP_PASSWORD,
       },
-      error_file: "./logs/worker-error.log",
-      out_file: "./logs/worker-out.log",
-      log_date_format: "YYYY-MM-DD HH:mm:ss Z",
+      max_memory_restart: '1G',
+      error_file: './logs/worker-error.log',
+      out_file: './logs/worker-out.log',
+      log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
       merge_logs: true,
-      autorestart: true,
-      watch: false,
-      max_memory_restart: "1G",
-      // Graceful shutdown
-      kill_timeout: 5000,
-      // Advanced features
-      min_uptime: "10s",
+      min_uptime: '10s',
       max_restarts: 10,
       restart_delay: 4000,
+      kill_timeout: 5000,
     },
   ],
 };
