@@ -47,6 +47,7 @@ module.exports = {
         REDIS_PORT: process.env.REDIS_PORT || 6379,
         REDIS_PASSWORD: process.env.REDIS_PASSWORD || '',
         PYTHON_CMD: process.env.PYTHON_CMD || 'python3',
+        PATH: process.env.PATH + ':/usr/bin:/usr/local/bin',
         // OnGrid API
         ONGRID_API_KEY: process.env.ONGRID_API_KEY,
         ONGRID_AUTH_TYPE: process.env.ONGRID_AUTH_TYPE,
