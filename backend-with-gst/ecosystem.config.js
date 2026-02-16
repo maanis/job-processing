@@ -6,7 +6,7 @@ module.exports = {
       name: "job-processing-backend",
       script: "./src/index.js",
       instances: 1,
-      exec_mode: "cluster",
+      exec_mode: "fork",
       env: {
         NODE_ENV: "production",
         PORT: process.env.PORT || 5000,

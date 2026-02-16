@@ -4,23 +4,19 @@ const redis = require("../src/config/redis.js");
 const connectDB = require("../src/config/db.js");
 
 const startJobWorker = async () => {
-    await connectDB();
+  await connectDB();
 
-    new Worker(
-        "processingJobs",
-        jobProcessor,
-        {
-            connection: redis,
-            concurrency: 2,
-            removeOnComplete: { count: 10 },
-            removeOnFail: { count: 5 },
+  new Worker("processingJobs", jobProcessor, {
+    connection: redis,
+    concurrency: 1,
+    removeOnComplete: { count: 10 },
+    removeOnFail: { count: 5 },
 
-            lockDuration: 300000,   // 5 min
-            lockRenewTime: 60000,   // renew every 1 min
-        }
-    );
+    lockDuration: 300000, // 5 min
+    lockRenewTime: 60000, // renew every 1 min
+  });
 
-    console.log("Job worker started");
+  console.log("Job worker started");
 };
 
 startJobWorker().catch(console.error);
