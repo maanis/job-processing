@@ -14,27 +14,29 @@ export default function Login() {
   const [error, setError] = useState("");
 
   // Check if already logged in
-  const token = localStorage.getItem('token');
+  const token = localStorage.getItem("token");
   if (token) {
     return <Navigate to="/dashboard" replace />;
   }
-
 
   const handleLogin = async (username: string, password: string) => {
     setIsLoading(true);
     setError("");
     try {
-      const response = await api.post('/auth/login', { username, password });
+      const response = await api.post("/auth/login", { username, password });
       const data = response.data;
-      localStorage.setItem('token', data.token);
-      localStorage.setItem('user', JSON.stringify(data.client));
+      localStorage.setItem("token", data.token);
+      localStorage.setItem("user", JSON.stringify(data.client));
       if (data.client && data.client.role) {
-        localStorage.setItem('role', data.client.role);
+        localStorage.setItem("role", data.client.role);
       }
       toast.success(data.message);
-      navigate('/dashboard');
+
+      // Navigate to appropriate dashboard based on role
+      const isAdmin = data.client?.role === "admin";
+      navigate(isAdmin ? "/admin/dashboard" : "/dashboard", { replace: true });
     } catch (err: any) {
-      const errorMessage = err.response?.data?.error || 'Login failed';
+      const errorMessage = err.response?.data?.error || "Login failed";
       setError(errorMessage);
       toast.error(errorMessage);
     } finally {
@@ -52,7 +54,9 @@ export default function Login() {
       <div className="w-full max-w-md animate-fade-in">
         <div className="rounded-2xl border border-border bg-card p-8 card-shadow-lg">
           <div className="mb-8 text-center">
-            <h1 className="text-2xl font-semibold text-foreground">Welcome back</h1>
+            <h1 className="text-2xl font-semibold text-foreground">
+              Welcome back
+            </h1>
             <p className="mt-2 text-sm text-muted-foreground">
               Sign in to your account to continue
             </p>
@@ -67,7 +71,10 @@ export default function Login() {
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-foreground mb-2">
+              <label
+                htmlFor="email"
+                className="block text-sm font-medium text-foreground mb-2"
+              >
                 Username
               </label>
               <div className="relative">
@@ -85,7 +92,10 @@ export default function Login() {
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-foreground mb-2">
+              <label
+                htmlFor="password"
+                className="block text-sm font-medium text-foreground mb-2"
+              >
                 Password
               </label>
               <div className="relative">
@@ -110,7 +120,10 @@ export default function Login() {
                 onChange={(e) => setRemember(e.target.checked)}
                 className="h-4 w-4 rounded border-input text-primary focus:ring-primary/20"
               />
-              <label htmlFor="remember" className="text-sm text-muted-foreground">
+              <label
+                htmlFor="remember"
+                className="text-sm text-muted-foreground"
+              >
                 Remember me
               </label>
             </div>

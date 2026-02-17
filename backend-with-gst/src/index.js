@@ -5,6 +5,8 @@ const cookieParser = require("cookie-parser");
 const helmet = require("helmet");
 const morgan = require("morgan");
 const rateLimit = require("express-rate-limit");
+const fs = require("fs");
+const path = require("path");
 const connectDB = require("./config/db");
 const healthRoutes = require("./routes/healthRoutes");
 const authRoutes = require("./routes/authRoutes");
@@ -12,6 +14,50 @@ const jobRoutes = require("./routes/jobRoutes");
 const { setupStaticFiles } = require("./middleware/uploadMiddleware");
 
 const app = express();
+
+// Create necessary data directories on startup
+const dataDirs = [
+  path.join(process.cwd(), "data", "processedRows"),
+  path.join(process.cwd(), "data", "failedRows"),
+  path.join(process.cwd(), "data", "jobs"),
+];
+
+dataDirs.forEach((dir) => {
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+    console.log(`Created directory: ${dir}`);
+  }
+});
+
+// Create empty CSV files with headers if they don't exist
+const processedRowsFile = path.join(
+  process.cwd(),
+  "data",
+  "processedRows",
+  "processed_rows.csv",
+);
+const failedRowsFile = path.join(
+  process.cwd(),
+  "data",
+  "failedRows",
+  "failed_rows.csv",
+);
+
+if (!fs.existsSync(processedRowsFile)) {
+  fs.writeFileSync(
+    processedRowsFile,
+    "Ref No,Candidate Name,PAN,DIN,GST,Status,Timestamp\n",
+  );
+  console.log("Created processed_rows.csv with headers");
+}
+
+if (!fs.existsSync(failedRowsFile)) {
+  fs.writeFileSync(
+    failedRowsFile,
+    "Ref No,Candidate Name,PAN,jobId,error,Timestamp\n",
+  );
+  console.log("Created failed_rows.csv with headers");
+}
 
 // Security Middleware
 app.use(
@@ -31,10 +77,18 @@ if (process.env.NODE_ENV === "production") {
 // Rate Limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per windowMs
+  max: 2000, // Increased limit for real-time job monitoring
   message: "Too many requests from this IP, please try again later.",
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => {
+    // Skip rate limiting for health checks and status endpoints
+    return (
+      req.path === "/api/health" ||
+      req.path === "/api/ping" ||
+      req.path.includes("/status")
+    );
+  },
 });
 
 // Apply rate limiting to all routes

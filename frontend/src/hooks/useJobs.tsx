@@ -1,7 +1,7 @@
-import { useQuery } from '@tanstack/react-query';
-import api from '@/services/api';
+import { useQuery } from "@tanstack/react-query";
+import api from "@/services/api";
 
-export type JobStatus = 'queued' | 'processing' | 'failed' | 'completed';
+export type JobStatus = "queued" | "processing" | "failed" | "completed";
 
 export interface Job {
   _id: string;
@@ -36,7 +36,7 @@ export interface FailedRow {
 
 export function useJobs(page: number = 1, limit: number = 8) {
   const { data, isLoading, error } = useQuery({
-    queryKey: ['jobs', page, limit],
+    queryKey: ["jobs", page, limit],
     queryFn: async () => {
       const response = await api.get(`/jobs?page=${page}&limit=${limit}`);
       return response.data;
@@ -44,12 +44,13 @@ export function useJobs(page: number = 1, limit: number = 8) {
     refetchInterval: (data) => {
       if (!data?.jobs) return 10000; // Poll every 10 seconds if no data
 
-      const hasActiveJob = data.jobs.some((job: Job) =>
-        job.jobStatus === 'processing' ||
-        job.directorshipReportStatus === 'running'
+      const hasActiveJob = data.jobs.some(
+        (job: Job) =>
+          job.jobStatus === "processing" ||
+          job.directorshipReportStatus === "running",
       );
 
-      return hasActiveJob ? 3000 : 10000; // Poll every 3 seconds if active, 10 seconds if not
+      return hasActiveJob ? 5000 : 15000; // Poll every 5s if active, 15s if not (reduced frequency)
     },
   });
 
